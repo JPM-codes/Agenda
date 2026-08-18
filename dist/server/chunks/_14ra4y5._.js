@@ -1,6 +1,4 @@
-module.exports=[68105,62294,e=>{"use strict";var t=e.i(66680),r=e.i(93458),n=e.x("node:sqlite",()=>require("node:sqlite"),!0),a=e.i(2157),s=e.i(50227);let o=s.default.join(process.cwd(),"data"),i=s.default.join(o,"agenda.db");a.default.existsSync(o)||a.default.mkdirSync(o,{recursive:!0});let c=new n.DatabaseSync(i);c.exec(`
-  PRAGMA foreign_keys = ON;
-
+module.exports=[68105,62294,e=>{"use strict";var t=e.i(66680),r=e.i(93458),n=e.x("node:sqlite",()=>require("node:sqlite"),!0),a=e.i(2157),s=e.i(50227);let o=s.default.join(process.cwd(),"data"),i=s.default.join(o,"agenda.db");a.default.existsSync(o)||a.default.mkdirSync(o,{recursive:!0});let c=new n.DatabaseSync(i);c.exec("PRAGMA journal_mode = WAL"),c.exec("PRAGMA busy_timeout = 5000"),c.exec("PRAGMA foreign_keys = ON"),c.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
