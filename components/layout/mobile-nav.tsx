@@ -10,7 +10,8 @@ import { useTheme } from "@/components/theme-provider";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/cn";
 
-const PRIMARY = ["/dashboard", "/agenda", "/tarefas"];
+const PRIMARY_LEFT = ["/dashboard", "/agenda"];
+const PRIMARY_RIGHT = ["/tarefas"];
 
 export function MobileNav({ userName }: { userName: string }) {
   const pathname = usePathname();
@@ -19,8 +20,11 @@ export function MobileNav({ userName }: { userName: string }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const primary = NAV_ITEMS.filter((i) => PRIMARY.includes(i.href));
-  const secondary = NAV_ITEMS.filter((i) => !PRIMARY.includes(i.href));
+  const left = NAV_ITEMS.filter((i) => PRIMARY_LEFT.includes(i.href));
+  const right = NAV_ITEMS.filter((i) => PRIMARY_RIGHT.includes(i.href));
+  const secondary = NAV_ITEMS.filter(
+    (i) => !PRIMARY_LEFT.includes(i.href) && !PRIMARY_RIGHT.includes(i.href)
+  );
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
@@ -32,7 +36,7 @@ export function MobileNav({ userName }: { userName: string }) {
     <>
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
         <div className="mx-auto grid max-w-lg grid-cols-5 items-center px-2 py-1.5">
-          {primary.map((item) => {
+          {left.map((item) => {
             const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
             return (
               <Link
@@ -60,6 +64,25 @@ export function MobileNav({ userName }: { userName: string }) {
               <Plus className="h-6 w-6" />
             </span>
           </button>
+
+          {right.map((item) => {
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium transition",
+                  active
+                    ? "text-indigo-600 dark:text-indigo-400"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
 
           <button
             onClick={() => setMoreOpen(true)}

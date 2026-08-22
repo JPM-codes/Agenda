@@ -122,7 +122,7 @@ export function DashboardView({ userName }: { userName: string }) {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <WorkDayCard workDay={workDay} onChange={setWorkDay} />
+          <WorkDayCard workDay={workDay} onChange={setWorkDay} date={today} />
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

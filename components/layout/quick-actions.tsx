@@ -14,7 +14,7 @@ import {
   LogOut,
   Loader2,
 } from "lucide-react";
-import { api } from "@/lib/client";
+import { api, type WorkDay } from "@/lib/client";
 import { toDateKey, toTimeHM } from "@/lib/utils";
 import { useToast } from "@/components/toast";
 
@@ -28,6 +28,23 @@ export function QuickActionsSheet({
   const router = useRouter();
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const [workDay, setWorkDay] = useState<WorkDay | null>(null);
+
+  const loadWorkDay = useCallback(async () => {
+    try {
+      const data = await api<{ workDays: WorkDay[] }>(
+        `/api/work-days?date=${toDateKey(new Date())}`
+      );
+      setWorkDay(data.workDays[0] ?? null);
+    } catch {
+      setWorkDay(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    loadWorkDay();
+  }, [open, loadWorkDay]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,13 +76,14 @@ export function QuickActionsSheet({
           body: JSON.stringify({ date: toDateKey(now), time: `${toTimeHM(now)}:00` }),
         });
         toast(label);
+        loadWorkDay();
       } catch (err) {
         toast(err instanceof Error ? err.message : "Não foi possível registrar.", "error");
       } finally {
         setBusy(null);
       }
     },
-    [busy, toast]
+    [busy, toast, loadWorkDay]
   );
 
   if (!open) return null;
@@ -78,11 +96,39 @@ export function QuickActionsSheet({
   ];
 
   const workItems = [
-    { label: "Registrar entrada", icon: LogIn, key: "in", endpoint: "/api/work-days/check-in", toast: "Entrada registrada." },
-    { label: "Iniciar almoço", icon: Utensils, key: "lunch-start", endpoint: "/api/work-days/lunch-start", toast: "Almoço iniciado." },
-    { label: "Retornar do almoço", icon: RotateCcw, key: "lunch-end", endpoint: "/api/work-days/lunch-end", toast: "Retorno registrado." },
-    { label: "Encerrar expediente", icon: LogOut, key: "check-out", endpoint: "/api/work-days/check-out", toast: "Expediente encerrado." },
-  ];
+    {
+      label: "Registrar entrada",
+      icon: LogIn,
+      key: "in",
+      endpoint: "/api/work-days/check-in",
+      toast: "Entrada registrada.",
+      show: !workDay?.check_in,
+    },
+    {
+      label: "Iniciar almoço",
+      icon: Utensils,
+      key: "lunch-start",
+      endpoint: "/api/work-days/lunch-start",
+      toast: "Almoço iniciado.",
+      show: !!workDay?.check_in && !workDay?.lunch_start,
+    },
+    {
+      label: "Retornar do almoço",
+      icon: RotateCcw,
+      key: "lunch-end",
+      endpoint: "/api/work-days/lunch-end",
+      toast: "Retorno registrado.",
+      show: !!workDay?.lunch_start && !workDay?.lunch_end,
+    },
+    {
+      label: "Encerrar expediente",
+      icon: LogOut,
+      key: "check-out",
+      endpoint: "/api/work-days/check-out",
+      toast: "Expediente encerrado.",
+      show: !!workDay?.check_in && !workDay?.check_out,
+    },
+  ].filter((item) => item.show);
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center">

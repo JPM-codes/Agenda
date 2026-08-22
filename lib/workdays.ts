@@ -59,8 +59,14 @@ export function recordWorkEvent(
   if (field === "lunch_start" && !existing!.check_in) {
     return { ok: false, error: "Inicie o expediente antes de registrar o almoço." };
   }
+  if (field === "lunch_start" && existing!.lunch_start) {
+    return { ok: false, error: "O almoço desta data já foi registrado." };
+  }
   if (field === "lunch_end" && !existing!.lunch_start) {
     return { ok: false, error: "Inicie o almoço antes de registrar o retorno." };
+  }
+  if (field === "lunch_end" && existing!.lunch_end) {
+    return { ok: false, error: "O retorno do almoço desta data já foi registrado." };
   }
   if (field === "check_out" && existing!.check_out) {
     return { ok: false, error: "O expediente desta data já foi encerrado." };
@@ -78,4 +84,67 @@ export function listWorkDayMonths(userId: number): { month: string; count: numbe
     )
     .all(userId) as unknown as { month: string; count: number; minutes: number }[];
   return rows;
+}
+
+const MANUAL_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+const MANUAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function toMinutes(t: string): number {
+  return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+}
+
+export function saveWorkDayManual(
+  userId: number,
+  date: string,
+  times: { check_in?: unknown; lunch_start?: unknown; lunch_end?: unknown; check_out?: unknown }
+): { ok: true; workDay: WorkDayRow } | { ok: false; error: string } {
+  if (!MANUAL_DATE_RE.test(date)) {
+    return { ok: false, error: "Data inválida." };
+  }
+  if (date > localDateKey(new Date())) {
+    return { ok: false, error: "Não é possível registrar expediente em uma data futura." };
+  }
+
+  const parsed: (string | null)[] = [];
+  for (const raw of [times.check_in, times.lunch_start, times.lunch_end, times.check_out]) {
+    if (raw == null || raw === "") {
+      parsed.push(null);
+      continue;
+    }
+    const s = String(raw).trim();
+    if (!MANUAL_TIME_RE.test(s)) {
+      return { ok: false, error: "Horário inválido (use HH:MM)." };
+    }
+    parsed.push(s.length === 5 ? `${s}:00` : s);
+  }
+  const [ci, ls, le, co] = parsed;
+
+  const labels = ["Entrada", "Início do almoço", "Fim do almoço", "Saída"];
+  for (let i = 0; i < 3; i++) {
+    if (parsed[i] && parsed[i + 1] && toMinutes(parsed[i + 1]!) < toMinutes(parsed[i]!)) {
+      return { ok: false, error: `${labels[i]} não pode ser depois de ${labels[i + 1].toLowerCase()}.` };
+    }
+  }
+
+  const existing = getWorkDay(userId, date);
+  let id: number;
+  if (existing) {
+    db.prepare(
+      `UPDATE work_days SET check_in = ?, lunch_start = ?, lunch_end = ?, check_out = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(ci, ls, le, co, existing.id);
+    id = existing.id;
+  } else {
+    const result = db
+      .prepare(
+        `INSERT INTO work_days (user_id, date, check_in, lunch_start, lunch_end, check_out) VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(userId, date, ci, ls, le, co);
+    id = Number(result.lastInsertRowid);
+  }
+  recalc(id);
+  return { ok: true, workDay: getWorkDay(userId, date)! };
 }

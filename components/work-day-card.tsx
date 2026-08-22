@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, LogIn, Utensils, RotateCcw, LogOut, CalendarCheck2 } from "lucide-react";
+import { Clock, LogIn, Utensils, RotateCcw, LogOut, CalendarCheck2, Pencil } from "lucide-react";
 import { api, type WorkDay } from "@/lib/client";
 import { toDateKey, toTimeHM, computeWorkDayState, formatMinutes, type WorkDayState } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { Input, FieldLabel } from "@/components/ui/field";
 import { useToast } from "@/components/toast";
 import { cn } from "@/lib/cn";
 
@@ -31,16 +33,42 @@ function liveMinutes(wd: WorkDay, now: Date): number {
   return Math.max(0, Math.floor((lunch - checkIn) / 60)) + after;
 }
 
+type EditForm = {
+  date: string;
+  check_in: string;
+  lunch_start: string;
+  lunch_end: string;
+  check_out: string;
+};
+
+const EMPTY_FORM = (date: string): EditForm => ({ date, check_in: "", lunch_start: "", lunch_end: "", check_out: "" });
+
+function formFromWorkDay(date: string, wd: WorkDay | null | undefined): EditForm {
+  return {
+    date,
+    check_in: wd?.check_in?.slice(0, 5) ?? "",
+    lunch_start: wd?.lunch_start?.slice(0, 5) ?? "",
+    lunch_end: wd?.lunch_end?.slice(0, 5) ?? "",
+    check_out: wd?.check_out?.slice(0, 5) ?? "",
+  };
+}
+
 export function WorkDayCard({
   workDay,
   onChange,
+  date,
 }: {
   workDay: WorkDay | null;
   onChange: (wd: WorkDay | null) => void;
+  date?: string;
 }) {
   const { toast } = useToast();
+  const cardDate = date ?? toDateKey(new Date());
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EditForm>(() => EMPTY_FORM(cardDate));
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 15000);
@@ -77,6 +105,44 @@ export function WorkDayCard({
     { label: "Saída", value: workDay?.check_out?.slice(0, 5) },
   ];
 
+  function openEdit() {
+    setForm(workDay && workDay.date === cardDate ? formFromWorkDay(cardDate, workDay) : EMPTY_FORM(cardDate));
+    setEditOpen(true);
+  }
+
+  async function pickEditDate(value: string) {
+    if (!value) {
+      setForm(EMPTY_FORM(""));
+      return;
+    }
+    setForm({ ...EMPTY_FORM(value), check_in: form.check_in, lunch_start: form.lunch_start, lunch_end: form.lunch_end, check_out: form.check_out });
+    try {
+      const data = await api<{ workDays: WorkDay[] }>(`/api/work-days?date=${value}`);
+      const row = data.workDays[0] ?? null;
+      setForm((f) => (f.date === value ? formFromWorkDay(value, row) : f));
+    } catch {
+      // mantém os campos como estão se a busca falhar
+    }
+  }
+
+  async function saveManual() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const data = await api<{ workDay: WorkDay }>("/api/work-days/manual", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      toast("Expediente atualizado.");
+      setEditOpen(false);
+      if (data.workDay.date === cardDate) onChange(data.workDay);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Não foi possível salvar.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -98,9 +164,14 @@ export function WorkDayCard({
             <p className="text-xs text-slate-500 dark:text-slate-400">{STATE_LABELS[state]}</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-lg font-bold text-slate-900 dark:text-white">{formatMinutes(total)}</p>
-          <p className="text-[11px] text-slate-400">trabalhado</p>
+        <div className="flex items-center gap-1.5">
+          <div className="text-right">
+            <p className="text-lg font-bold text-slate-900 dark:text-white">{formatMinutes(total)}</p>
+            <p className="text-[11px] text-slate-400">trabalhado</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={openEdit} aria-label="Editar horários" title="Editar horários">
+            <Pencil className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -121,7 +192,7 @@ export function WorkDayCard({
             <LogIn className="h-4 w-4" /> Iniciar expediente
           </Button>
         )}
-        {state === "em_expediente" && (
+        {state === "em_expediente" && !workDay?.lunch_start && (
           <Button className="flex-1" variant="secondary" onClick={() => record("/api/work-days/lunch-start", "lunch-start", "Almoço iniciado.")} disabled={busy}>
             <Utensils className="h-4 w-4" /> Iniciar almoço
           </Button>
@@ -147,6 +218,72 @@ export function WorkDayCard({
           </div>
         )}
       </div>
+
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Editar expediente"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={saveManual} disabled={saving || !form.date}>
+              {saving ? "Salvando…" : "Salvar"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <FieldLabel>Data</FieldLabel>
+              <Input
+                type="date"
+                max={toDateKey(new Date())}
+                value={form.date}
+                onChange={(e) => pickEditDate(e.target.value)}
+              />
+            </div>
+            <div />
+            <div>
+              <FieldLabel>Entrada</FieldLabel>
+              <Input
+                type="time"
+                value={form.check_in}
+                onChange={(e) => setForm((f) => ({ ...f, check_in: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel>Saída</FieldLabel>
+              <Input
+                type="time"
+                value={form.check_out}
+                onChange={(e) => setForm((f) => ({ ...f, check_out: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel>Início do almoço</FieldLabel>
+              <Input
+                type="time"
+                value={form.lunch_start}
+                onChange={(e) => setForm((f) => ({ ...f, lunch_start: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel>Fim do almoço</FieldLabel>
+              <Input
+                type="time"
+                value={form.lunch_end}
+                onChange={(e) => setForm((f) => ({ ...f, lunch_end: e.target.value }))}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Preencha os horários manualmente ou deixe em branco os que não ocorreram. Funciona para hoje e dias passados.
+          </p>
+        </div>
+      </Modal>
     </section>
   );
 }

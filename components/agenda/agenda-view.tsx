@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api, type Task, type Reminder, type Note, type WorkDay } from "@/lib/client";
 import { WorkDayCard } from "@/components/work-day-card";
-import { formatDateBR, formatMinutes, monthGrid, monthLabel, toDateKey, weekdayShortBR } from "@/lib/utils";
+import { formatDayLabel, formatMinutes, monthGrid, monthLabel, toDateKey, weekdayShortBR } from "@/lib/utils";
 import { useToast } from "@/components/toast";
 import { cn } from "@/lib/cn";
 
@@ -100,7 +100,7 @@ export function AgendaView() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">Agenda</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {view === "mes" ? monthLabel(date) : formatDateBR(date)}
+            {view === "mes" ? monthLabel(date) : formatDayLabel(date)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export function AgendaView() {
       ) : view === "semana" ? (
         <WeekView date={date} byDate={byDate} onSelect={setDate} today={today} />
       ) : (
-        <DayView current={current} onWorkDayChange={(wd) => setWorkDays((l) => [...l.filter((w) => w.date !== date), ...(wd ? [wd] : [])])} />
+        <DayView date={date} current={current} onWorkDayChange={(wd) => setWorkDays((l) => [...l.filter((w) => w.date !== date), ...(wd ? [wd] : [])])} />
       )}
     </div>
   );
@@ -163,9 +163,11 @@ export function AgendaView() {
 type DayBundle = { tasks: Task[]; reminders: Reminder[]; notes: Note[]; workDay: WorkDay | null };
 
 function DayView({
+  date,
   current,
   onWorkDayChange,
 }: {
+  date: string;
   current: DayBundle;
   onWorkDayChange: (wd: WorkDay | null) => void;
 }) {
@@ -174,7 +176,7 @@ function DayView({
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <WorkDayCard workDay={wd} onChange={onWorkDayChange} />
+        <WorkDayCard workDay={wd} onChange={onWorkDayChange} date={date} />
       </div>
 
       <div className="space-y-5">

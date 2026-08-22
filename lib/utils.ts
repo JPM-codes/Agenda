@@ -66,6 +66,25 @@ export function weekdayShortBR(dateKey: string): string {
   return new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(new Date(y, m - 1, d));
 }
 
+function dayDiff(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  return Math.round(
+    (new Date(ay, am - 1, ad).getTime() - new Date(by, bm - 1, bd).getTime()) / 86400000
+  );
+}
+
+export function formatDayLabel(dateKey: string): string {
+  if (!dateKey) return "";
+  const today = toDateKey(new Date());
+  const diff = dayDiff(dateKey, today);
+  if (diff === 0) return "Hoje";
+  if (diff === -1) return "Ontem";
+  if (diff === 1) return "Amanhã";
+  const [, m, d] = dateKey.split("-");
+  return dateKey.slice(0, 4) === today.slice(0, 4) ? `${d}/${m}` : `${d}/${m}/${dateKey.slice(0, 4)}`;
+}
+
 export function greeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Bom dia";
